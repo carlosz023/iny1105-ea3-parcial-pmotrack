@@ -18,13 +18,7 @@ spec:
         image: redmine:5
         ports:
         - containerPort: 3000
-        resources:
-          requests:
-            cpu: "200m"
-            memory: "250Mi"
-          limits:
-            cpu: "500m"
-            memory: "500Mi"
+          name: redmine-port
         env:
         - name: REDMINE_DB_POSTGRES
           value: "postgres-service"
@@ -43,6 +37,11 @@ spec:
             secretKeyRef:
               name: postgres-secret
               key: POSTGRES_PASSWORD
+        resources:
+          requests:
+            cpu: "200m"
+          limits:
+            cpu: "400m"
 ---
 apiVersion: v1
 kind: Service
