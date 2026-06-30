@@ -1,112 +1,32 @@
-# INY1105 — EA3: Orquestación de Contenedores con Kubernetes y AWS EKS
+# INY1105 — EA3: Evaluación Parcial N°03 - Solución PMOTrack
 
-**INY1105 — Infraestructura de Aplicaciones I**  
-DuocUC · Escuela de Informática y Telecomunicaciones · 2026/1
-
----
-
-## Instrucciones
-
-### 1. Crea tu propio repositorio desde este template
-
-1. Haz clic en el botón **"Use this template"** → **"Create a new repository"**
-2. En el campo **Repository name** escribe: `iny1105-ea3-nombre-apellido` (usa tu nombre real)
-3. Selecciona **Private**
-4. Haz clic en **"Create repository"**
-
-> **Importante:** El repositorio debe quedar en **tu cuenta personal** de GitHub.  
-> El nombre debe seguir el formato `iny1105-ea3-nombre-apellido` exactamente.
+**Autor:** Carlos Campos Zegarra 
+**Institución:** DuocUC  
+**Curso:** Tecnologias de Virtualizacion
 
 ---
 
-### 2. Clona tu repositorio
+## 1. Descripción de la Arquitectura Objetivo
+La consultora PMOTrack requería el despliegue de su herramienta de gestión de proyectos (Redmine) acoplada a una base de datos robusta (PostgreSQL). Se diseñó e implementó una arquitectura en dos capas orquestada en un clúster de Amazon EKS dentro del namespace personalizado `pmotrack`:
 
-```bash
-git clone https://github.com/tu-usuario/iny1105-ea3-nombre-apellido.git
-cd iny1105-ea3-nombre-apellido
-```
-
----
-
-### 3. Estructura del repositorio
-
-```
-iny1105-ea3-nombre-apellido/
-├── act31/                  ← Act 3.1: Introducción a Kubernetes y AWS EKS
-│   ├── Dockerfile          ← completar: imagen base Prometheus
-│   ├── manifests/
-│   │   ├── deployment.yaml ← completar: secciones TODO
-│   │   └── service.yaml    ← completar: secciones TODO
-│   └── README.md
-├── act32/                  ← Act 3.2: Objetos de Kubernetes
-│   ├── manifests/
-│   │   ├── deployment.yaml
-│   │   ├── service.yaml
-│   │   └── configmap.yaml  ← completar: secciones TODO
-│   └── README.md
-├── act33/                  ← Act 3.3: WordPress + MySQL (almacenamiento, networking y autoscaling)
-│   ├── manifests/          ← PVC (EBS/EFS), Deployments, Services, Ingress (ALB),
-│   │                          HPA y NetworkPolicy
-│   └── README.md
-├── commons/
-│   └── scripts/
-│       ├── setup-cloudshell.sh ← instala kubectl y Terraform en AWS CloudShell
-│       ├── create-cluster.sh   ← crea el cluster EKS
-│       ├── delete-cluster.sh   ← elimina el cluster EKS
-│       └── apply-manifests.sh  ← SOLO act31: aplica todos los manifiestos de una vez
-├── .gitignore
-└── README.md               ← este archivo
-```
+* **Capa de Backend (Base de Datos):** Un pod de PostgreSQL v16 aislado internamente, cuyo almacenamiento es persistente y seguro.
+* **Capa de Frontend (Aplicación Web):** Un pod de Redmine v5 capaz de escalar horizontalmente de forma automática según la demanda de CPU, expuesto hacia el exterior para el acceso de los usuarios de la consultora.
 
 ---
 
-### 4. Flujo de trabajo por actividad
-
-```
-[1] Leer el README.md de la carpeta actXX/
-        ↓
-[2] Completar los archivos marcados con # TODO
-        ↓
-[3] Aplicar los manifiestos con kubectl apply
-        ↓
-[4] Verificar el despliegue con kubectl get pods/svc
-        ↓
-[5] Hacer commit y push con tus cambios
-```
+## 2. Decisiones Técnicas Remarcables
+* **Gestión de Secretos (Security):** Las credenciales de acceso a la base de datos (`POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`) se abstrajeron por completo del código utilizando un objeto `Secret` de Kubernetes mapeado en Base64.
+* **Almacenamiento Persistente:** Se utilizaron objetos `PersistentVolume` y `PersistentVolumeClaim` configurados con la política `hostPath` apuntando al disco del nodo del laboratorio. Esto asegura que si el Pod de PostgreSQL falla o se recrea, los datos no se pierdan de forma volátil.
+* **Networking y Exposición:** * La base de datos se expuso mediante un servicio tipo `ClusterIP` (puerto 5432), garantizando que solo sea accesible de manera interna por Redmine.
+    * El frontend de Redmine se expuso mediante un servicio tipo `NodePort` mapeado estáticamente al puerto `30080`, permitiendo el acceso web público a través de las IPs de los nodos de AWS.
+* **Autoscaling (HPA):** Se configuraron límites y solicitudes de recursos (`resources.requests.cpu: 200m`) en el contenedor de Redmine. Esto habilitó al componente `Metrics Server` la recolección de métricas precisas para gatillar el autoescalado horizontal (HPA) asignando un rango de entre 1 y 5 réplicas cuando el uso de CPU supere el 50%.
 
 ---
 
-### 5. Scripts de utilidad
+## 3. Instrucciones de Despliegue Paso a Paso
+Para replicar esta infraestructura de principio a fin de manera limpia y ordenada, ejecute los siguientes comandos en orden jerárquico dentro de AWS CloudShell:
 
-Desde la raíz del repositorio:
-
-```bash
-# Crear el cluster EKS (necesario al inicio de cada clase)
-bash commons/scripts/create-cluster.sh
-
-# Eliminar el cluster EKS (obligatorio al terminar cada clase)
-bash commons/scripts/delete-cluster.sh
-
-# Aplicar todos los manifiestos de UNA actividad (solo act31)
-bash commons/scripts/apply-manifests.sh act31
-```
-
-> **Importante:** El script `apply-manifests.sh` se usa **solo en la Act 3.1**,
-> como introducción. En las actividades 3.2, 3.3 y 3.4 aplicarás los manifiestos
-> **manualmente** con `kubectl apply -f manifests/<archivo>.yaml`, respetando el
-> orden indicado en el README de cada actividad. Así aprendes las dependencias
-> entre objetos de Kubernetes.
-
----
-
-### 6. Subir tu trabajo
-
-```bash
-git add .
-git commit -m "feat: act3X completada - Nombre Apellido"
-git push origin main
-```
-
----
-
-*Docente: Rodrigo Aguilar G. — r.aguilarg@profesor.duoc.cl*
+1. **Preparar el entorno y acceder al directorio:**
+   ```bash
+   cd iny1105-ea3-parcial-pmotrack
+   bash commons/scripts/setup-cloudshell.sh
